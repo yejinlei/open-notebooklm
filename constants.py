@@ -12,41 +12,129 @@ CHARACTER_LIMIT = 100_000
 
 # Gradio-related constants
 GRADIO_CACHE_DIR = "./gradio_cached_examples/tmp/"
-GRADIO_CLEAR_CACHE_OLDER_THAN = 1 * 24 * 60 * 60  # 1 day
+GRADIO_CLEAR_CACHE_OLDER_THAN = 1 * 60 * 60  # 1 hour
 
 # Error messages-related constants
-ERROR_MESSAGE_NO_INPUT = "Please provide at least one PDF file or a URL."
-ERROR_MESSAGE_NOT_PDF = "The provided file is not a PDF. Please upload only PDF files."
-ERROR_MESSAGE_NOT_SUPPORTED_IN_MELO_TTS = "The selected language is not supported without advanced audio generation. Please enable advanced audio generation or choose a supported language."
-ERROR_MESSAGE_READING_PDF = "Error reading the PDF file"
-ERROR_MESSAGE_TOO_LONG = "The total content is too long. Please ensure the combined text from PDFs and URL is fewer than {CHARACTER_LIMIT} characters."
+ERROR_MESSAGE_NO_INPUT = "请至少提供一个PDF文件或URL。"
+ERROR_MESSAGE_NOT_PDF = "提供的文件不是PDF或Word文档。请只上传PDF或Word文件。"
+ERROR_MESSAGE_NOT_SUPPORTED_IN_MELO_TTS = "所选语言在不使用高级音频生成的情况下不受支持。请启用高级音频生成或选择受支持的语言。"
+ERROR_MESSAGE_READING_PDF = "读取PDF文件时出错"
+ERROR_MESSAGE_TOO_LONG = "总内容过长。请确保PDF和URL的组合文本少于{CHARACTER_LIMIT}个字符。"
 
-# Fireworks API-related constants
-FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
-FIREWORKS_MAX_TOKENS = 16_384
-FIREWORKS_MODEL_ID = "accounts/fireworks/models/llama-v3p3-70b-instruct"
-FIREWORKS_TEMPERATURE = 0.1
+# 大模型平台配置
+DEFAULT_LLM_PLATFORM = os.getenv("DEFAULT_LLM_PLATFORM", "siliconflow")
 
-# MeloTTS
-MELO_API_NAME = "/synthesize"
-MELO_TTS_SPACES_ID = "mrfakename/MeloTTS"
-MELO_RETRY_ATTEMPTS = 3
-MELO_RETRY_DELAY = 5  # in seconds
+# 百度文心一言 API 相关常量
+ERNIE_CONFIG = {
+    "api_key": os.getenv("ERNIE_API_KEY"),
+    "secret_key": os.getenv("ERNIE_SECRET_KEY"),
+    "model_id": os.getenv("ERNIE_MODEL_ID", "ernie-4.0"),
+    "max_tokens": int(os.getenv("ERNIE_MAX_TOKENS", "16384")),
+    "temperature": float(os.getenv("ERNIE_TEMPERATURE", "0.1")),
+}
 
-MELO_TTS_LANGUAGE_MAPPING = {
-    "en": "EN",
-    "es": "ES",
-    "fr": "FR",
-    "zh": "ZJ",
-    "ja": "JP",
-    "ko": "KR",
+# 阿里通义千问 API 相关常量
+QIANWEN_CONFIG = {
+    "api_key": os.getenv("QIANWEN_API_KEY"),
+    "secret_key": os.getenv("QIANWEN_SECRET_KEY"),
+    "model_id": os.getenv("QIANWEN_MODEL_ID", "qwen-plus"),
+    "max_tokens": int(os.getenv("QIANWEN_MAX_TOKENS", "16384")),
+    "temperature": float(os.getenv("QIANWEN_TEMPERATURE", "0.1")),
+}
+
+# 硅基流动 API 相关常量
+SILICONFLOW_CONFIG = {
+    "api_key": os.getenv("SILICONFLOW_API_KEY"),
+    "model_id": os.getenv("SILICONFLOW_MODEL_ID", "Qwen/Qwen2-72B-Instruct"),
+    "max_tokens": int(os.getenv("SILICONFLOW_MAX_TOKENS", "16384")),
+    "temperature": float(os.getenv("SILICONFLOW_TEMPERATURE", "0.1")),
 }
 
 
-# Suno related constants
-SUNO_LANGUAGE_MAPPING = {
+
+# 大模型平台配置映射
+LLM_PLATFORMS = {
+    "ernie": ERNIE_CONFIG,
+    "qianwen": QIANWEN_CONFIG,
+    "siliconflow": SILICONFLOW_CONFIG,
+}
+
+# TTS服务配置
+DEFAULT_TTS_SERVICE = os.getenv("DEFAULT_TTS_SERVICE", "baidu")
+
+# 百度语音合成 API 相关常量
+BAIDU_TTS_CONFIG = {
+    "app_id": os.getenv("BAIDU_APP_ID"),
+    "api_key": os.getenv("BAIDU_API_KEY"),
+    "secret_key": os.getenv("BAIDU_SECRET_KEY"),
+    "speed": int(os.getenv("BAIDU_TTS_SPEED", "5")),  # 语速，取值0-9，默认为5中语速
+    "pitch": int(os.getenv("BAIDU_TTS_PITCH", "5")),  # 音调，取值0-9，默认为5中语调
+    "volume": int(os.getenv("BAIDU_TTS_VOLUME", "5")),  # 音量，取值0-9，默认为5中音量
+    "per": {
+        "Host": "103",  # 度小宇，男声
+        "Guest": "105"  # 度小美，女声
+    },
+    "retry_attempts": int(os.getenv("BAIDU_RETRY_ATTEMPTS", "3")),
+    "retry_delay": int(os.getenv("BAIDU_RETRY_DELAY", "5")),  # in seconds
+}
+
+# 阿里语音合成 API 相关常量
+ALI_TTS_CONFIG = {
+    "access_key_id": os.getenv("ALI_ACCESS_KEY_ID"),
+    "access_key_secret": os.getenv("ALI_ACCESS_KEY_SECRET"),
+    "app_key": os.getenv("ALI_APP_KEY"),
+    "voice": {
+        "Host": "zh-CN_XiaoyunVoice",  # 阿里云晓云，女声
+        "Guest": "zh-CN_YunxiVoice"   # 阿里云云溪，男声
+    },
+    "speed": float(os.getenv("ALI_TTS_SPEED", "1.0")),  # 语速，取值0.6-2.0，默认为1.0
+    "pitch": float(os.getenv("ALI_TTS_PITCH", "1.0")),  # 音调，取值0.6-2.0，默认为1.0
+    "volume": float(os.getenv("ALI_TTS_VOLUME", "50")),  # 音量，取值0-100，默认为50
+    "retry_attempts": int(os.getenv("ALI_RETRY_ATTEMPTS", "3")),
+    "retry_delay": int(os.getenv("ALI_RETRY_DELAY", "5")),  # in seconds
+}
+
+# 讯飞语音合成 API 相关常量
+XUNFEI_TTS_CONFIG = {
+    "app_id": os.getenv("XUNFEI_APP_ID"),
+    "api_key": os.getenv("XUNFEI_API_KEY"),
+    "api_secret": os.getenv("XUNFEI_API_SECRET"),
+    "voice_name": {
+        "Host": "xiaoyan",  # 讯飞小燕，女声
+        "Guest": "xiaofeng"  # 讯飞小峰，男声
+    },
+    "speed": int(os.getenv("XUNFEI_TTS_SPEED", "50")),  # 语速，取值0-100，默认为50
+    "pitch": int(os.getenv("XUNFEI_TTS_PITCH", "50")),  # 音调，取值0-100，默认为50
+    "volume": int(os.getenv("XUNFEI_TTS_VOLUME", "50")),  # 音量，取值0-100，默认为50
+    "retry_attempts": int(os.getenv("XUNFEI_RETRY_ATTEMPTS", "3")),
+    "retry_delay": int(os.getenv("XUNFEI_RETRY_DELAY", "5")),  # in seconds
+}
+
+# 硅基流动语音合成 API 相关常量
+SILICONFLOW_TTS_CONFIG = {
+    "api_key": os.getenv("SILICONFLOW_API_KEY"),
+    "model_id": os.getenv("SILICONFLOW_TTS_MODEL_ID", "fnlp/MOSS-TTSD-v0.5"),
+    "voice_name": {
+        "Host": "fnlp/MOSS-TTSD-v0.5:alex",    # 男声
+        "Guest": "fnlp/MOSS-TTSD-v0.5:anna"     # 女声
+    },
+    "speed": float(os.getenv("SILICONFLOW_TTS_SPEED", "1.0")),  # 语速，取值0.25-4.0，默认为1.0
+    "retry_attempts": int(os.getenv("SILICONFLOW_RETRY_ATTEMPTS", "3")),
+    "retry_delay": int(os.getenv("SILICONFLOW_RETRY_DELAY", "5")),  # in seconds
+}
+
+# TTS服务配置映射
+TTS_SERVICES = {
+    "baidu": BAIDU_TTS_CONFIG,
+    "ali": ALI_TTS_CONFIG,
+    "xunfei": XUNFEI_TTS_CONFIG,
+    "siliconflow": SILICONFLOW_TTS_CONFIG,
+}
+
+# 语言映射
+LANGUAGE_MAPPING = {
+    "中文": "zh",
     "English": "en",
-    "Chinese": "zh",
     "French": "fr",
     "German": "de",
     "Hindi": "hi",
@@ -60,13 +148,52 @@ SUNO_LANGUAGE_MAPPING = {
     "Turkish": "tr",
 }
 
+# 注释掉原有配置，保留备份
+# Fireworks API-related constants
+# FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
+# FIREWORKS_MAX_TOKENS = 16_384
+# FIREWORKS_MODEL_ID = "accounts/fireworks/models/llama-v3p3-70b-instruct"
+# FIREWORKS_TEMPERATURE = 0.1
+
+# MeloTTS
+# MELO_API_NAME = "/synthesize"
+# MELO_TTS_SPACES_ID = "mrfakename/MeloTTS"
+# MELO_RETRY_ATTEMPTS = 3
+# MELO_RETRY_DELAY = 5  # in seconds
+
+# MELO_TTS_LANGUAGE_MAPPING = {
+#     "en": "EN",
+#     "es": "ES",
+#     "fr": "FR",
+#     "zh": "ZJ",
+#     "ja": "JP",
+#     "ko": "KR",
+# }
+
+# Suno related constants
+# SUNO_LANGUAGE_MAPPING = {
+#     "English": "en",
+#     "Chinese": "zh",
+#     "French": "fr",
+#     "German": "de",
+#     "Hindi": "hi",
+#     "Italian": "it",
+#     "Japanese": "ja",
+#     "Korean": "ko",
+#     "Polish": "pl",
+#     "Portuguese": "pt",
+#     "Russian": "ru",
+#     "Spanish": "es",
+#     "Turkish": "tr",
+# }
+
 # General audio-related constants
-NOT_SUPPORTED_IN_MELO_TTS = list(
-    set(SUNO_LANGUAGE_MAPPING.values()) - set(MELO_TTS_LANGUAGE_MAPPING.keys())
-)
-NOT_SUPPORTED_IN_MELO_TTS = [
-    key for key, id in SUNO_LANGUAGE_MAPPING.items() if id in NOT_SUPPORTED_IN_MELO_TTS
-]
+# NOT_SUPPORTED_IN_MELO_TTS = list(
+#     set(SUNO_LANGUAGE_MAPPING.values()) - set(MELO_TTS_LANGUAGE_MAPPING.keys())
+# )
+# NOT_SUPPORTED_IN_MELO_TTS = [
+#     key for key, id in SUNO_LANGUAGE_MAPPING.items() if id in NOT_SUPPORTED_IN_MELO_TTS
+# ]
 
 # Jina Reader-related constants
 JINA_READER_URL = "https://r.jina.ai/"
@@ -75,55 +202,64 @@ JINA_RETRY_DELAY = 5  # in seconds
 
 # UI-related constants
 UI_DESCRIPTION = """
-Generate Podcasts from PDFs using open-source AI.
+使用国内AI从PDF和Word文档生成播客。
 
-Built with:
-- [Llama 3.3 70B 🦙](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct) via [Fireworks AI 🎆](https://fireworks.ai/) and [Instructor 📐](https://github.com/instructor-ai/instructor) 
-- [MeloTTS 🐚](https://huggingface.co/myshell-ai/MeloTTS-English)
-- [Bark 🐶](https://huggingface.co/suno/bark)
+构建使用：
+- [百度文心一言 🤖](https://cloud.baidu.com/product/wenxinworkshop) 
+- [百度语音合成 🎤](https://cloud.baidu.com/product/speech/tts)
 - [Jina Reader 🔍](https://jina.ai/reader/)
 
-**Note:** Only the text is processed (100k character limits).
+**注意：** 仅处理文本（100k字符限制）。
 """
-UI_AVAILABLE_LANGUAGES = list(set(SUNO_LANGUAGE_MAPPING.keys()))
+UI_AVAILABLE_LANGUAGES = list(set(LANGUAGE_MAPPING.keys()))
 UI_INPUTS = {
     "file_upload": {
-        "label": "1. 📄 Upload your PDF(s)",
-        "file_types": [".pdf"],
+        "label": "1. 📄 上传您的文档文件（支持PDF、Word等格式）",
+        "file_types": None,
         "file_count": "multiple",
     },
     "url": {
-        "label": "2. 🔗 Paste a URL (optional)",
-        "placeholder": "Enter a URL to include its content",
+        "label": "2. 🔗 粘贴URL（可选）",
+        "placeholder": "输入URL以包含其内容",
     },
     "question": {
-        "label": "3. 🤔 Do you have a specific question or topic in mind?",
-        "placeholder": "Enter a question or topic",
+        "label": "3. 🤔 您有特定的问题或主题吗？",
+        "placeholder": "输入问题或主题",
     },
     "tone": {
-        "label": "4. 🎭 Choose the tone",
-        "choices": ["Fun", "Formal"],
-        "value": "Fun",
+        "label": "4. 🎭 选择语气",
+        "choices": ["有趣", "正式"],
+        "value": "有趣",
     },
     "length": {
-        "label": "5. ⏱️ Choose the length",
-        "choices": ["Short (1-2 min)", "Medium (3-5 min)"],
-        "value": "Medium (3-5 min)",
+        "label": "5. ⏱️ 选择长度",
+        "choices": ["短 (1-2分钟)", "中 (3-5分钟)"],
+        "value": "中 (3-5分钟)",
     },
     "language": {
-        "label": "6. 🌐 Choose the language",
+        "label": "6. 🌐 选择语言",
         "choices": UI_AVAILABLE_LANGUAGES,
-        "value": "English",
+        "value": "中文",
+    },
+    "llm_platform": {
+        "label": "7. 🤖 选择大模型平台",
+        "choices": list(LLM_PLATFORMS.keys()),
+        "value": "siliconflow",
+    },
+    "tts_service": {
+        "label": "8. 🎤 选择TTS服务",
+        "choices": list(TTS_SERVICES.keys()),
+        "value": "baidu",
     },
     "advanced_audio": {
-        "label": "7. 🔄 Use advanced audio generation? (Experimental)",
+        "label": "9. 🔄 使用高级音频生成？（实验性）",
         "value": True,
     },
 }
 UI_OUTPUTS = {
-    "audio": {"label": "🔊 Podcast", "format": "mp3"},
+    "audio": {"label": "🔊 播客", "format": "mp3"},
     "transcript": {
-        "label": "📜 Transcript",
+        "label": "📜  transcript",
     },
 }
 UI_API_NAME = "generate_podcast"
@@ -133,30 +269,36 @@ UI_EXAMPLES = [
     [
         [str(Path("examples/1310.4546v1.pdf"))],
         "",
-        "Explain this paper to me like I'm 5 years old",
-        "Fun",
-        "Short (1-2 min)",
-        "English",
+        "用5岁孩子能理解的方式解释这篇论文",
+        "有趣",
+        "短 (1-2分钟)",
+        "中文",
+        "siliconflow",
+        "siliconflow",
         True,
     ],
     [
         [],
-        "https://en.wikipedia.org/wiki/Hugging_Face",
-        "How did Hugging Face become so successful?",
-        "Fun",
-        "Short (1-2 min)",
-        "English",
+        "https://zh.wikipedia.org/wiki/Hugging_Face",
+        "Hugging Face是如何变得如此成功的？",
+        "有趣",
+        "短 (1-2分钟)",
+        "中文",
+        "siliconflow",
+        "siliconflow",
         False,
     ],
     [
         [],
-        "https://simple.wikipedia.org/wiki/Taylor_Swift",
-        "Why is Taylor Swift so popular?",
-        "Fun",
-        "Short (1-2 min)",
-        "English",
+        "https://zh.wikipedia.org/wiki/泰勒·斯威夫特",
+        "为什么泰勒·斯威夫特如此受欢迎？",
+        "有趣",
+        "短 (1-2分钟)",
+        "中文",
+        "siliconflow",
+        "siliconflow",
         False,
     ],
 ]
-UI_CACHE_EXAMPLES = True
+UI_CACHE_EXAMPLES = False
 UI_SHOW_API = True

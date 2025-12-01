@@ -5,6 +5,7 @@ main.py
 # Standard library imports
 import glob
 import os
+import shutil
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -15,7 +16,11 @@ import gradio as gr
 import random
 from loguru import logger
 from pypdf import PdfReader
-from pydub import AudioSegment
+from docx import Document
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # Local imports
 from constants import (
@@ -23,14 +28,11 @@ from constants import (
     CHARACTER_LIMIT,
     ERROR_MESSAGE_NOT_PDF,
     ERROR_MESSAGE_NO_INPUT,
-    ERROR_MESSAGE_NOT_SUPPORTED_IN_MELO_TTS,
     ERROR_MESSAGE_READING_PDF,
     ERROR_MESSAGE_TOO_LONG,
     GRADIO_CACHE_DIR,
     GRADIO_CLEAR_CACHE_OLDER_THAN,
-    MELO_TTS_LANGUAGE_MAPPING,
-    NOT_SUPPORTED_IN_MELO_TTS,
-    SUNO_LANGUAGE_MAPPING,
+    LANGUAGE_MAPPING,
     UI_ALLOW_FLAGGING,
     UI_API_NAME,
     UI_CACHE_EXAMPLES,
@@ -59,6 +61,8 @@ def generate_podcast(
     tone: Optional[str],
     length: Optional[str],
     language: str,
+    llm_platform: str,
+    tts_service: str,
     use_advanced_audio: bool,
 ) -> Tuple[str, str]:
     """Generate the audio and transcript from the PDFs and/or URL."""
@@ -68,33 +72,62 @@ def generate_podcast(
     # Choose random number from 0 to 8
     random_voice_number = random.randint(0, 8) # this is for suno model
 
-    if not use_advanced_audio and language in NOT_SUPPORTED_IN_MELO_TTS:
-        raise gr.Error(ERROR_MESSAGE_NOT_SUPPORTED_IN_MELO_TTS)
+    # 移除对旧TTS服务的支持检查，百度TTS支持所有语言
 
     # Check if at least one input is provided
     if not files and not url:
         raise gr.Error(ERROR_MESSAGE_NO_INPUT)
 
-    # Process PDFs if any
+    # Process PDFs and Word documents if any
     if files:
         for file in files:
-            if not file.lower().endswith(".pdf"):
-                raise gr.Error(ERROR_MESSAGE_NOT_PDF)
-
             try:
-                with Path(file).open("rb") as f:
-                    reader = PdfReader(f)
-                    text += "\n\n".join([page.extract_text() for page in reader.pages])
+                if file.lower().endswith(".pdf"):
+                    # Process PDF file with improved error handling
+                    with Path(file).open("rb") as f:
+                        reader = PdfReader(f)
+                        # 逐页提取文本，添加更详细的错误处理
+                        page_texts = []
+                        for page_num, page in enumerate(reader.pages, 1):
+                            try:
+                                page_text = page.extract_text()
+                                if page_text:
+                                    page_texts.append(page_text)
+                            except Exception as page_e:
+                                logger.warning(f"提取第{page_num}页文本失败: {str(page_e)}")
+                                # 跳过失败的页面，继续处理其他页面
+                                continue
+                        if page_texts:
+                            text += "\n\n".join(page_texts) + "\n\n"
+                elif file.lower().endswith(".docx"):
+                    # Process Word document
+                    doc = Document(file)
+                    doc_text = "\n\n".join([paragraph.text for paragraph in doc.paragraphs if paragraph.text.strip()])
+                    text += doc_text
+                else:
+                    # 不支持的文件类型，在解析阶段报错
+                    file_extension = Path(file).suffix.lower()
+                    raise gr.Error(f"不支持的文件类型: {file_extension}。请上传PDF(.pdf)或Word(.docx)文件。")
+            except gr.Error:
+                # 重新抛出Gradio错误
+                raise
             except Exception as e:
-                raise gr.Error(f"{ERROR_MESSAGE_READING_PDF}: {str(e)}")
+                raise gr.Error(f"读取文件时出错: {str(e)}")
 
     # Process URL if provided
     if url:
         try:
             url_text = parse_url(url)
-            text += "\n\n" + url_text
+            if url_text:
+                text += "\n\n" + url_text
+            else:
+                logger.warning(f"URL解析成功，但未提取到文本: {url}")
+                # 继续执行，不中断流程
         except ValueError as e:
             raise gr.Error(str(e))
+        except Exception as e:
+            # 捕获所有异常，提供更友好的错误信息
+            raise gr.Error(f"处理URL时出错: {str(e)}")
 
     # Check total character count
     if len(text) > CHARACTER_LIMIT:
@@ -112,20 +145,52 @@ def generate_podcast(
     if language:
         modified_system_prompt += f"\n\n{LANGUAGE_MODIFIER} {language}."
 
-    # Call the LLM
-    if length == "Short (1-2 min)":
-        llm_output = generate_script(modified_system_prompt, text, ShortDialogue)
-    else:
-        llm_output = generate_script(modified_system_prompt, text, MediumDialogue)
+    # Call the LLM with improved error handling
+    try:
+        if length == "Short (1-2 min)":
+            llm_output = generate_script(modified_system_prompt, text, ShortDialogue, llm_platform)
+        else:
+            llm_output = generate_script(modified_system_prompt, text, MediumDialogue, llm_platform)
 
-    logger.info(f"Generated dialogue: {llm_output}")
+        logger.info(f"Generated dialogue: {llm_output}")
+    except Exception as e:
+        logger.error(f"大模型调用失败: {str(e)}")
+        raise gr.Error(f"生成播客脚本失败: {str(e)}")
+
+    # Create a unique temporary directory for this podcast generation session
+    session_id = str(int(time.time()))
+    
+    # 生成基于文件名的目录名
+    import re
+    if files:
+        # 获取第一个文件名（不含扩展名）
+        first_file = Path(files[0])
+        filename = first_file.stem  # 获取文件名（不含扩展名）
+        # 清理文件名，只保留字母、数字、下划线和连字符
+        filename_clean = re.sub(r'[^\w\-]', '_', filename)
+        # 限制文件名长度
+        filename_clean = filename_clean[:30] if len(filename_clean) > 30 else filename_clean
+        dir_name = f"{filename_clean}_{session_id}"
+    else:
+        # 如果没有文件上传，使用URL的简化版本或默认值
+        if url:
+            url_simplified = re.sub(r'[^\w\-]', '_', url[:20])
+            filename_clean = url_simplified
+        else:
+            filename_clean = "url"
+        dir_name = f"{filename_clean}_{session_id}"
+    
+    podcast_temp_dir = Path(GRADIO_CACHE_DIR) / dir_name
+    podcast_temp_dir.mkdir(exist_ok=True)
+    
+    logger.info(f"Created temporary directory for podcast: {podcast_temp_dir}")
 
     # Process the dialogue
     audio_segments = []
     transcript = ""
     total_characters = 0
-
-    for line in llm_output.dialogue:
+    
+    for i, line in enumerate(llm_output.dialogue):
         logger.info(f"Generating audio for {line.speaker}: {line.text}")
         if line.speaker == "Host (Jane)":
             speaker = f"**Host**: {line.text}"
@@ -134,44 +199,104 @@ def generate_podcast(
         transcript += speaker + "\n\n"
         total_characters += len(line.text)
 
-        language_for_tts = SUNO_LANGUAGE_MAPPING[language]
+        # 使用新的语言映射
+        language_for_tts = LANGUAGE_MAPPING[language]
 
-        if not use_advanced_audio:
-            language_for_tts = MELO_TTS_LANGUAGE_MAPPING[language_for_tts]
-
-        # Get audio file path
+        # Get audio file path with sequence number
         audio_file_path = generate_podcast_audio(
-            line.text, line.speaker, language_for_tts, use_advanced_audio, random_voice_number
+            line.text, line.speaker, language_for_tts, use_advanced_audio, random_voice_number, tts_service, str(podcast_temp_dir), i
         )
-        # Read the audio file into an AudioSegment
-        audio_segment = AudioSegment.from_file(audio_file_path)
-        audio_segments.append(audio_segment)
+        
+        # Add audio file path directly to the list
+        audio_segments.append(audio_file_path)
 
-    # Concatenate all audio segments
-    combined_audio = sum(audio_segments)
+    # Merge all audio segments into a single podcast file using FFmpeg
+    if not audio_segments:
+        raise gr.Error("No audio files were generated")
+    
+    # Create a list file for FFmpeg concatenation
+    list_file_path = podcast_temp_dir / "audio_list.txt"
+    with open(list_file_path, 'w', encoding='utf-8') as f:
+        for audio_file in audio_segments:
+            f.write(f"file '{audio_file}'\n")
+    
+    # Generate merged audio file with filename+timestamp format
+    merged_audio_path = podcast_temp_dir / f"{filename_clean}_{session_id}.mp3"
+    
+    try:
+        # Use FFmpeg to concatenate audio files with improved parameters
+        import subprocess
+        result = subprocess.run([
+            'ffmpeg', '-f', 'concat', '-safe', '0', '-i', str(list_file_path),
+            '-c', 'libmp3lame', '-q:a', '2', '-ar', '44100', '-ac', '2', str(merged_audio_path)
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.warning(f"FFmpeg concatenation failed: {result.stderr}")
+            # Fallback: Try alternative FFmpeg command
+            try:
+                result = subprocess.run([
+                    'ffmpeg', '-i', f"concat:{'|'.join(audio_segments)}",
+                    '-c', 'libmp3lame', '-q:a', '2', '-ar', '44100', '-ac', '2', str(merged_audio_path)
+                ], capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.warning(f"Alternative FFmpeg concatenation also failed: {result.stderr}")
+                    # Fallback to first audio file if both FFmpeg commands fail
+                    temporary_file = Path(audio_segments[0])
+                else:
+                    temporary_file = merged_audio_path
+                    logger.info(f"Successfully merged {len(audio_segments)} audio files into: {temporary_file}")
+            except Exception as alt_e:
+                logger.warning(f"Alternative FFmpeg command failed: {alt_e}")
+                # Fallback to first audio file if FFmpeg is not available
+                temporary_file = Path(audio_segments[0])
+        else:
+            temporary_file = merged_audio_path
+            logger.info(f"Successfully merged {len(audio_segments)} audio files into: {temporary_file}")
+            
+    except Exception as e:
+        logger.warning(f"FFmpeg not available or failed: {e}")
+        # Fallback to first audio file if FFmpeg is not available
+        temporary_file = Path(audio_segments[0])
 
-    # Export the combined audio to a temporary file
+    # Clean up old podcast directories (over a day old)
     temporary_directory = GRADIO_CACHE_DIR
-    os.makedirs(temporary_directory, exist_ok=True)
+    for item in Path(temporary_directory).iterdir():
+        if item.is_dir() and "_" in item.name:  # 匹配所有包含下划线的目录（新的命名格式）
+            try:
+                # Check if directory is older than GRADIO_CLEAR_CACHE_OLDER_THAN
+                if time.time() - item.stat().st_mtime > GRADIO_CLEAR_CACHE_OLDER_THAN:
+                    # Remove all files in the directory
+                    for file_in_dir in item.iterdir():
+                        if file_in_dir.is_file():
+                            file_in_dir.unlink()
+                    # Remove the directory itself
+                    item.rmdir()
+                    logger.info(f"Cleaned up old podcast directory: {item}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up directory {item}: {e}")
 
-    temporary_file = NamedTemporaryFile(
-        dir=temporary_directory,
-        delete=False,
-        suffix=".mp3",
-    )
-    combined_audio.export(temporary_file.name, format="mp3")
+    logger.info(f"Generated {total_characters} characters of audio in directory: {podcast_temp_dir}")
 
-    # Delete any files in the temp directory that end with .mp3 and are over a day old
-    for file in glob.glob(f"{temporary_directory}*.mp3"):
-        if (
-            os.path.isfile(file)
-            and time.time() - os.path.getmtime(file) > GRADIO_CLEAR_CACHE_OLDER_THAN
-        ):
-            os.remove(file)
+    return str(temporary_file), transcript
 
-    logger.info(f"Generated {total_characters} characters of audio")
 
-    return temporary_file.name, transcript
+def clear_cache() -> str:
+    """手动清理所有缓存文件"""
+    cache_dir = Path(GRADIO_CACHE_DIR)
+    if cache_dir.exists():
+        try:
+            # 删除整个缓存目录
+            shutil.rmtree(cache_dir)
+            # 重新创建空目录
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            logger.info("手动清理缓存成功")
+            return "✅ 缓存清理完成！所有临时MP3文件已删除。"
+        except Exception as e:
+            logger.error(f"清理缓存失败: {e}")
+            return f"❌ 缓存清理失败: {str(e)}"
+    else:
+        return "ℹ️ 缓存目录不存在，无需清理。"
 
 
 demo = gr.Interface(
@@ -203,6 +328,16 @@ demo = gr.Interface(
             choices=UI_INPUTS["language"]["choices"],  # Step 6: Language
             value=UI_INPUTS["language"]["value"],
             label=UI_INPUTS["language"]["label"],
+        ),
+        gr.Dropdown(
+            label=UI_INPUTS["llm_platform"]["label"],  # Step 7: LLM Platform
+            choices=UI_INPUTS["llm_platform"]["choices"],
+            value=UI_INPUTS["llm_platform"]["value"],
+        ),
+        gr.Dropdown(
+            label=UI_INPUTS["tts_service"]["label"],  # Step 8: TTS Service
+            choices=UI_INPUTS["tts_service"]["choices"],
+            value=UI_INPUTS["tts_service"]["value"],
         ),
         gr.Checkbox(
             label=UI_INPUTS["advanced_audio"]["label"],
