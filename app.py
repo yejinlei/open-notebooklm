@@ -51,7 +51,8 @@ from prompts import (
     TONE_MODIFIER,
 )
 from schema import DialogueItem, ShortDialogue, MediumDialogue, LongDialogue
-from utils import generate_podcast_audio, generate_script, parse_url
+from utils import generate_script, parse_url
+from tts import generate_podcast_audio
 
 
 def generate_podcast(
