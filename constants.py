@@ -45,9 +45,11 @@ QIANWEN_CONFIG = {
 # 硅基流动 API 相关常量
 SILICONFLOW_CONFIG = {
     "api_key": os.getenv("SILICONFLOW_API_KEY"),
-    "model_id": os.getenv("SILICONFLOW_MODEL_ID", "Qwen/Qwen2-72B-Instruct"),
+    "model_id": os.getenv("SILICONFLOW_MODEL_ID", "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"),
     "max_tokens": int(os.getenv("SILICONFLOW_MAX_TOKENS", "16384")),
     "temperature": float(os.getenv("SILICONFLOW_TEMPERATURE", "0.1")),
+    "retry_attempts": int(os.getenv("SILICONFLOW_RETRY_ATTEMPTS", "3")),
+    "retry_delay": int(os.getenv("SILICONFLOW_RETRY_DELAY", "2")),
 }
 
 
