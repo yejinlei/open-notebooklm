@@ -50,7 +50,7 @@ from prompts import (
     SYSTEM_PROMPT,
     TONE_MODIFIER,
 )
-from schema import ShortDialogue, MediumDialogue
+from schema import DialogueItem, ShortDialogue, MediumDialogue, LongDialogue
 from utils import generate_podcast_audio, generate_script, parse_url
 
 
@@ -62,8 +62,7 @@ def generate_podcast(
     length: Optional[str],
     language: str,
     llm_platform: str,
-    tts_service: str,
-    use_advanced_audio: bool,
+    tts_service: str
 ) -> Tuple[str, str]:
     """Generate the audio and transcript from the PDFs and/or URL."""
 
@@ -147,8 +146,10 @@ def generate_podcast(
 
     # Call the LLM with improved error handling
     try:
-        if length == "Short (1-2 min)":
+        if length == "短 (1-2分钟)":
             llm_output = generate_script(modified_system_prompt, text, ShortDialogue, llm_platform)
+        elif length == "长 (15-20分钟)":
+            llm_output = generate_script(modified_system_prompt, text, LongDialogue, llm_platform)
         else:
             llm_output = generate_script(modified_system_prompt, text, MediumDialogue, llm_platform)
 
@@ -190,25 +191,70 @@ def generate_podcast(
     transcript = ""
     total_characters = 0
     
-    for i, line in enumerate(llm_output.dialogue):
-        logger.info(f"Generating audio for {line.speaker}: {line.text}")
-        if line.speaker == "Host (Jane)":
-            speaker = f"**Host**: {line.text}"
-        else:
-            speaker = f"**{llm_output.name_of_guest}**: {line.text}"
-        transcript += speaker + "\n\n"
-        total_characters += len(line.text)
-
-        # 使用新的语言映射
-        language_for_tts = LANGUAGE_MAPPING[language]
-
-        # Get audio file path with sequence number
+    # 使用新的语言映射
+    language_for_tts = LANGUAGE_MAPPING[language]
+    
+    # 检查是否为硅基流动TTS服务，需要批量合成
+    if tts_service == "siliconflow":
+        # 硅基流动需要一次性调用API来保持音色一致性
+        # 将所有对话内容合并成一个文本，使用标签区分不同角色
+        combined_text = ""
+        for i, line in enumerate[DialogueItem](llm_output.dialogue):
+            logger.info(f"Preparing audio for {line.speaker}: {line.text}")
+            if line.speaker == "Host (Jane)":
+                speaker = f"**Host**: {line.text}"
+                # 硅基流动使用[S1]标签表示主持人
+                tts_text = f"[S1]{line.text}"
+            elif line.speaker == "Guest":
+                speaker = f"**{llm_output.name_of_guest}**: {line.text}"
+                # 硅基流动使用[S2]标签表示嘉宾
+                tts_text = f"[S2]{line.text}"
+            elif line.speaker == "Guest 2":
+                speaker = f"**{llm_output.name_of_guest} 2**: {line.text}"
+                # 硅基流动使用[S3]标签表示第二个嘉宾
+                tts_text = f"[S3]{line.text}"
+            elif line.speaker == "Guest 3":
+                speaker = f"**{llm_output.name_of_guest} 3**: {line.text}"
+                # 硅基流动使用[S4]标签表示第三个嘉宾
+                tts_text = f"[S4]{line.text}"
+            elif line.speaker == "Guest 4":
+                speaker = f"**{llm_output.name_of_guest} 4**: {line.text}"
+                # 硅基流动使用[S5]标签表示第四个嘉宾
+                tts_text = f"[S5]{line.text}"
+            else:
+                speaker = f"**{line.speaker}**: {line.text}"
+                # 默认使用S2标签
+                tts_text = f"[S2]{line.text}"
+            transcript += speaker + "\n\n"
+            total_characters += len(line.text)
+            combined_text += tts_text + "\n"
+        
+        # 一次性调用硅基流动TTS API合成整个对话
+        logger.info(f"Calling SiliconFlow TTS API with combined text (length: {len(combined_text)})")
         audio_file_path = generate_podcast_audio(
-            line.text, line.speaker, language_for_tts, use_advanced_audio, random_voice_number, tts_service, str(podcast_temp_dir), i
+            combined_text, "Combined", language_for_tts, random_voice_number, tts_service, str(podcast_temp_dir), 0
         )
         
-        # Add audio file path directly to the list
+        # 将合成的音频文件添加到列表
         audio_segments.append(audio_file_path)
+    else:
+        # 其他TTS服务使用逐条合成的方式
+        for i, line in enumerate[DialogueItem](llm_output.dialogue):
+            logger.info(f"Generating audio for {line.speaker}: {line.text}")
+            if line.speaker == "Host (Jane)":
+                speaker = f"**Host**: {line.text}"
+            else:
+                speaker = f"**{llm_output.name_of_guest}**: {line.text}"
+            transcript += speaker + "\n\n"
+            total_characters += len(line.text)
+
+            # Get audio file path with sequence number
+            audio_file_path = generate_podcast_audio(
+                line.text, line.speaker, language_for_tts, random_voice_number, tts_service, str(podcast_temp_dir), i
+            )
+            
+            # Add audio file path directly to the list
+            audio_segments.append(audio_file_path)
 
     # Merge all audio segments into a single podcast file using FFmpeg
     if not audio_segments:
@@ -338,10 +384,6 @@ demo = gr.Interface(
             label=UI_INPUTS["tts_service"]["label"],  # Step 8: TTS Service
             choices=UI_INPUTS["tts_service"]["choices"],
             value=UI_INPUTS["tts_service"]["value"],
-        ),
-        gr.Checkbox(
-            label=UI_INPUTS["advanced_audio"]["label"],
-            value=UI_INPUTS["advanced_audio"]["value"],
         ),
     ],
     outputs=[

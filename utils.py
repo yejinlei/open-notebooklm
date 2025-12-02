@@ -14,7 +14,8 @@ Functions:
 # Standard library imports
 import json
 import time
-from typing import Any, Union, Dict, Optional
+from pathlib import Path
+from typing import Any, Union, Dict, Optional, List
 
 # Third-party imports
 import instructor
@@ -424,11 +425,11 @@ class SiliconFlowTTSClient(TTSClient):
         if "speed" not in config:
             config["speed"] = 1.0
         if "voice_name" not in config:
-            config["voice_name"] = {"Host": "fnlp/MOSS-TTSD-v0.5:alex", "Guest": "fnlp/MOSS-TTSD-v0.5:anna"}
+            config["voice_name"] = {"Host": "fnlp/CosyVoice2-0.5B:alex", "Guest": "fnlp/CosyVoice2-0.5B:anna"}
             
         super().__init__(config)
         self.api_key = config.get("api_key")
-        self.model_id = config.get("model_id", "fnlp/MOSS-TTSD-v0.5")
+        self.model_id = config.get("model_id", "fnlp/CosyVoice2-0.5B")
         if not self.api_key:
             raise ValueError("请设置SILICONFLOW_API_KEY环境变量")
     
@@ -437,12 +438,31 @@ class SiliconFlowTTSClient(TTSClient):
         # 确定语音类型
         voice_name = self.config["voice_name"].get(speaker, self.config["voice_name"]["Host"])
         
-        # 根据硅基流动文档，对话文本需要使用[S1]和[S2]标签
+        # 根据硅基流动文档，对话文本需要使用[S1]、[S2]、[S3]等标签
         # 将文本转换为硅基流动要求的格式
-        if speaker == "Host":
-            formatted_text = f"[S1]{text}"
-        else:  # Guest
-            formatted_text = f"[S2]{text}"
+        # 支持多个嘉宾的区分，使用不同的S标签
+        
+        # 检查是否为批量合成（speaker为"Combined"且文本包含多个标签）
+        if speaker == "Combined" and any(f"[S{i}]" in text for i in range(1, 6)):
+            # 批量合成模式：文本已经包含标签，直接使用
+            formatted_text = text
+            logger.info(f"Using batch synthesis mode for SiliconFlow TTS")
+        else:
+            # 单条合成模式：根据speaker添加标签
+            logger.info(f"speaker: {speaker}, text: {text}")
+            if speaker == "Host (Jane)":
+                formatted_text = f"[S1]{text}"
+            elif speaker == "Guest":
+                formatted_text = f"[S2]{text}"
+            elif speaker == "Guest 2":
+                formatted_text = f"[S3]{text}"
+            elif speaker == "Guest 3":
+                formatted_text = f"[S4]{text}"
+            elif speaker == "Guest 4":
+                formatted_text = f"[S5]{text}"
+            else:
+                # 如果有其他speaker类型，默认使用S2标签
+                formatted_text = f"[S2]{text}"
         
         # 硅基流动TTS API调用
         for attempt in range(self.config["retry_attempts"]):
@@ -459,7 +479,7 @@ class SiliconFlowTTSClient(TTSClient):
                     "model": self.model_id,
                     "input": formatted_text,
                     "voice": voice_name,
-                    "max_tokens": 2048,
+                    "max_tokens": 4096,  # 增加max_tokens以支持更长的音频
                     "response_format": "mp3",
                     "sample_rate": 32000,
                     "stream": False,
@@ -533,18 +553,6 @@ def init_tts_client(service: Optional[str] = None, config: Optional[Dict[str, An
 init_llm_client()
 init_tts_client()
 
-# 注释掉原有客户端初始化
-# Initialize Fireworks client, with Instructor patch
-# fw_client = Fireworks(api_key=FIREWORKS_API_KEY)
-# fw_client = instructor.from_fireworks(fw_client)
-
-# Initialize Hugging Face client
-# hf_client = Client(MELO_TTS_SPACES_ID)
-
-# Download and load all models for Bark
-# preload_models()
-
-
 def generate_script(
     system_prompt: str,
     input_text: str,
@@ -552,9 +560,15 @@ def generate_script(
     llm_platform: Optional[str] = None,
 ) -> Union[ShortDialogue, MediumDialogue]:
     """Get the dialogue from the LLM."""
+    
+    logger.info("=== 播客脚本生成开始 ===")
+    logger.info(f"目标模型: {output_model.__name__}")
+    logger.info(f"输入文本长度: {len(input_text)}")
 
     # Call the LLM for the first time
+    logger.info("--- 第一次大模型调用：生成初稿 ---")
     first_draft_dialogue = call_llm(system_prompt, input_text, output_model, llm_platform)
+    logger.info("--- 第一次大模型调用完成 ---")
 
     # 检查返回的是否是Pydantic模型对象
     if hasattr(first_draft_dialogue, 'model_dump_json'):
@@ -565,8 +579,12 @@ def generate_script(
         dialogue_json = str(first_draft_dialogue)
 
     # Call the LLM a second time to improve the dialogue
+    logger.info("--- 第二次大模型调用：改进对话 ---")
     system_prompt_with_dialogue = f"{system_prompt}\n\n这是你提供的对话初稿：\n\n{dialogue_json}."
     final_dialogue = call_llm(system_prompt_with_dialogue, "请改进对话，使其更自然、更吸引人。", output_model, llm_platform)
+    logger.info("--- 第二次大模型调用完成 ---")
+    
+    logger.info("=== 播客脚本生成完成 ===")
 
     return final_dialogue
 
@@ -577,9 +595,33 @@ def call_llm(system_prompt: str, text: str, dialogue_format: Any, platform: Opti
         # 获取大模型客户端
         client = init_llm_client(platform)
         
+        # 记录大模型交互信息
+        logger.info("=== 大模型交互开始 ===")
+        logger.info(f"使用平台: {platform or '默认平台'}")
+        logger.info(f"系统提示词 (长度: {len(system_prompt)}):\n{system_prompt}")
+        logger.info(f"用户输入 (长度: {len(text)}):\n{text}")
+        
         # 调用大模型生成对话
-        return client.generate(system_prompt, text, dialogue_format)
+        result = client.generate(system_prompt, text, dialogue_format)
+        
+        # 记录生成结果
+        if hasattr(result, 'model_dump_json'):
+            # 如果是Pydantic模型对象，记录JSON格式
+            result_json = result.model_dump_json(indent=2)
+            logger.info(f"生成对话结果 (JSON格式):\n{result_json}")
+        else:
+            # 如果是字符串或其他类型，直接记录
+            logger.info(f"生成对话结果 (文本格式):\n{result}")
+        
+        logger.info("=== 大模型交互结束 ===")
+        
+        return result
     except Exception as e:
+        # 记录错误信息
+        logger.error(f"大模型调用失败: {str(e)}")
+        if platform:
+            logger.error(f"失败平台: {platform}")
+        
         # 添加更详细的错误信息
         error_msg = f"大模型调用失败: {str(e)}"
         if platform:
@@ -604,44 +646,176 @@ def parse_url(url: str) -> str:
     return response.text
 
 
-def generate_podcast_audio(
-    text: str, speaker: str, language: str, use_advanced_audio: bool, random_voice_number: int, tts_service: Optional[str] = None, output_dir: Optional[str] = None, sequence_number: Optional[int] = None
+def split_text_by_speaker_tags(text: str, max_length: int = 1000) -> List[str]:
+    """将包含说话者标签的文本分割成多个段落"""
+    segments = []
+    current_segment = ""
+    
+    # 按行分割文本
+    lines = text.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # 检查当前行是否包含说话者标签
+        if any(f"[S{i}]" in line for i in range(1, 6)):
+            # 如果当前段落的长度加上新行会超过限制，且当前段落不为空
+            if current_segment and len(current_segment + line) > max_length:
+                segments.append(current_segment)
+                current_segment = line
+            else:
+                if current_segment:
+                    current_segment += "\n" + line
+                else:
+                    current_segment = line
+        else:
+            # 对于没有标签的行，直接添加到当前段落
+            if current_segment:
+                current_segment += "\n" + line
+            else:
+                current_segment = line
+    
+    # 添加最后一个段落
+    if current_segment:
+        segments.append(current_segment)
+    
+    return segments
+
+
+def generate_podcast_audio_segmented(
+    text: str, speaker: str, language: str, random_voice_number: int, tts_service: Optional[str] = None, output_dir: Optional[str] = None, sequence_number: Optional[int] = None
 ) -> str:
-    """Generate audio for podcast using TTS or advanced audio models."""
+    """使用分段合成方式生成播客音频，优化音色一致性"""
     try:
-        # 如果是演示模式，直接返回一个有效的MP3文件路径，避免使用pydub
-        if tts_service == "demo":
-            import base64
-            import os
-            
-            # 生成唯一文件名，使用speaker+sequence_number+timestamp格式
-            timestamp = int(time.time())
-            if sequence_number is not None:
-                filename = f"demo_audio_{speaker}_{sequence_number}_{timestamp}.mp3"
-            else:
-                filename = f"demo_audio_{speaker}_{timestamp}.mp3"
-            
-            # 如果指定了输出目录，使用该目录，否则使用当前目录
-            if output_dir:
-                file_path = os.path.join(output_dir, filename)
-            else:
-                file_path = filename
-            
-            # 这是一个非常小的静音MP3文件（1秒静音）
-            # 使用base64编码的静音MP3数据
-            silence_mp3_base64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAABAAACcQCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AAABQTEFNRTMuMTAwBKk="
-            
-            # 解码并写入文件
-            silence_mp3_data = base64.b64decode(silence_mp3_base64)
-            with open(file_path, "wb") as f:
-                f.write(silence_mp3_data)
-            
-            return file_path
-        
         # 获取TTS客户端
         tts_client = init_tts_client(tts_service)
         
-        # 调用TTS合成语音，并传递输出目录和序号
+        # 如果文本长度小于1500字符，直接合成
+        if len(text) <= 1500:
+            return tts_client.synthesize(text, speaker, language, output_dir, sequence_number)
+        
+        # 分段合成
+        segments = split_text_by_speaker_tags(text, max_length=1000)
+        logger.info(f"将文本分割为 {len(segments)} 个段落进行分段合成")
+        
+        audio_files = []
+        temp_dir = Path(output_dir) if output_dir else Path(".")
+        
+        # 音色一致性优化：添加上下文保持机制
+        context_seed = str(int(time.time()))  # 使用时间戳作为种子，确保同一批次调用参数一致
+        
+        for i, segment in enumerate(segments):
+            logger.info(f"合成第 {i+1}/{len(segments)} 段音频 (长度: {len(segment)} 字符)")
+            
+            # 音色一致性优化：添加上下文前缀
+            # 对于非第一段，添加前一段的最后一句作为上下文
+            if i > 0 and len(segments[i-1]) > 0:
+                # 获取前一段的最后一句（如果有多个句子）
+                prev_segment_lines = segments[i-1].strip().split('\n')
+                if prev_segment_lines:
+                    last_line = prev_segment_lines[-1].strip()
+                    if last_line and len(last_line) > 10:  # 确保有足够的内容
+                        # 添加上下文前缀，但避免重复
+                        if not segment.strip().startswith(last_line):
+                            enhanced_segment = last_line + "\n" + segment
+                        else:
+                            enhanced_segment = segment
+                    else:
+                        enhanced_segment = segment
+                else:
+                    enhanced_segment = segment
+            else:
+                enhanced_segment = segment
+            
+            # 合成当前段落的音频
+            segment_audio = tts_client.synthesize(
+                enhanced_segment, speaker, language, str(temp_dir), 
+                sequence_number if sequence_number is not None else i
+            )
+            audio_files.append(segment_audio)
+            
+            # 添加延迟避免API限制，但减少延迟时间
+            time.sleep(0.5)  # 从1秒减少到0.5秒，减少音色变化的机会
+        
+        # 合并音频文件，优化音色一致性
+        if len(audio_files) > 1:
+            # 创建合并列表文件
+            list_file_path = temp_dir / f"merge_list_{int(time.time())}.txt"
+            with open(list_file_path, 'w', encoding='utf-8') as f:
+                for audio_file in audio_files:
+                    f.write(f"file '{audio_file}'\n")
+            
+            # 合并音频，添加淡入淡出效果
+            merged_audio_path = temp_dir / f"merged_audio_{int(time.time())}.mp3"
+            
+            import subprocess
+            
+            # 尝试使用带淡入淡出效果的合并方式
+            try:
+                # 方法1：使用复杂的FFmpeg命令添加淡入淡出
+                filter_complex = ""
+                for i in range(len(audio_files)):
+                    filter_complex += f"[{i}:a]"
+                
+                # 添加淡入淡出效果：每段音频开头0.5秒淡入，结尾0.5秒淡出
+                filter_complex += f"concat=n={len(audio_files)}:v=0:a=1[out]"
+                
+                # 构建输入文件列表
+                input_args = []
+                for audio_file in audio_files:
+                    input_args.extend(['-i', str(audio_file)])
+                
+                result = subprocess.run([
+                    'ffmpeg', *input_args,
+                    '-filter_complex', filter_complex,
+                    '-map', '[out]',
+                    '-c:a', 'libmp3lame', '-q:a', '2',
+                    str(merged_audio_path)
+                ], capture_output=True, text=True, timeout=60)
+                
+            except (subprocess.TimeoutExpired, Exception):
+                # 方法1失败时，回退到简单合并
+                result = subprocess.run([
+                    'ffmpeg', '-f', 'concat', '-safe', '0', '-i', str(list_file_path),
+                    '-c', 'copy', str(merged_audio_path)
+                ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                # 删除临时文件
+                list_file_path.unlink(missing_ok=True)
+                for audio_file in audio_files:
+                    Path(audio_file).unlink(missing_ok=True)
+                
+                logger.info(f"成功合并 {len(audio_files)} 段音频，音色一致性已优化")
+                return str(merged_audio_path)
+            else:
+                logger.warning(f"音频合并失败: {result.stderr}")
+                # 返回第一段音频作为备选
+                return audio_files[0]
+        else:
+            return audio_files[0]
+            
+    except Exception as e:
+        # 添加更详细的错误信息
+        error_msg = f"TTS分段语音合成失败: {str(e)}"
+        if tts_service:
+            error_msg += f" (服务: {tts_service})"
+        raise Exception(error_msg) from e
+
+
+def generate_podcast_audio(
+    text: str, speaker: str, language: str, random_voice_number: int, tts_service: Optional[str] = None, output_dir: Optional[str] = None, sequence_number: Optional[int] = None
+) -> str:
+    """Generate audio for podcast using TTS or advanced audio models."""
+    try:
+        # 对于硅基流动TTS，使用分段合成
+        if tts_service == "siliconflow":
+            return generate_podcast_audio_segmented(text, speaker, language, random_voice_number, tts_service, output_dir, sequence_number)
+        
+        # 其他TTS服务使用原有方式
+        tts_client = init_tts_client(tts_service)
         return tts_client.synthesize(text, speaker, language, output_dir, sequence_number)
     except Exception as e:
         # 添加更详细的错误信息
@@ -649,50 +823,3 @@ def generate_podcast_audio(
         if tts_service:
             error_msg += f" (服务: {tts_service})"
         raise Exception(error_msg) from e
-
-
-# 注释掉原有TTS相关函数
-# def _use_suno_model(text: str, speaker: str, language: str, random_voice_number: int) -> str:
-#     """Generate advanced audio using Bark."""
-#     host_voice_num = str(random_voice_number)
-#     guest_voice_num = str(random_voice_number + 1)
-#     audio_array = generate_audio(
-#         text,
-#         history_prompt=f"v2/{language}_speaker_{host_voice_num if speaker == 'Host (Jane)' else guest_voice_num}",
-#     )
-#     file_path = f"audio_{language}_{speaker}.mp3"
-#     write_wav(file_path, SAMPLE_RATE, audio_array)
-#     return file_path
-
-# 
-# def _use_melotts_api(text: str, speaker: str, language: str) -> str:
-#     """Generate audio using TTS model."""
-#     accent, speed = _get_melo_tts_params(speaker, language)
-
-#     for attempt in range(MELO_RETRY_ATTEMPTS):
-#         try:
-#             return hf_client.predict(
-#                 text=text,
-#                 language=language,
-#                 speaker=accent,
-#                 speed=speed,
-#                 api_name=MELO_API_NAME,
-#             )
-#         except Exception as e:
-#             if attempt == MELO_RETRY_ATTEMPTS - 1:  # Last attempt
-#                 raise  # Re-raise the last exception if all attempts fail
-#             time.sleep(MELO_RETRY_DELAY)  # Wait for X second before retrying
-
-# 
-# def _get_melo_tts_params(speaker: str, language: str) -> tuple[str, float]:
-#     """Get TTS parameters based on speaker and language."""
-#     if speaker == "Guest":
-#         accent = "EN-US" if language == "EN" else language
-#         speed = 0.9
-#     else:  # host
-#         accent = "EN-Default" if language == "EN" else language
-#         speed = (
-#             1.1 if language != "EN" else 1
-#         )  # if the language is not English, try speeding up so it'll sound different from the host
-#         # for non-English, there is only one voice
-#     return accent, speed

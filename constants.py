@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 # Key constants
-APP_TITLE = "Open NotebookLM 🎙️"
+APP_TITLE = "AI播客 🎙️"
 CHARACTER_LIMIT = 100_000
 
 # Gradio-related constants
@@ -15,8 +15,8 @@ GRADIO_CACHE_DIR = "./gradio_cached_examples/tmp/"
 GRADIO_CLEAR_CACHE_OLDER_THAN = 1 * 60 * 60  # 1 hour
 
 # Error messages-related constants
-ERROR_MESSAGE_NO_INPUT = "请至少提供一个PDF文件或URL。"
-ERROR_MESSAGE_NOT_PDF = "提供的文件不是PDF或Word文档。请只上传PDF或Word文件。"
+ERROR_MESSAGE_NO_INPUT = "请至少提供一个Word/PDF/TXT类型文件或URL。"
+ERROR_MESSAGE_NOT_PDF = "提供的文件不是PDF/Word/TXT文档。请只上传PDF/Word/TXT文件。"
 ERROR_MESSAGE_NOT_SUPPORTED_IN_MELO_TTS = "所选语言在不使用高级音频生成的情况下不受支持。请启用高级音频生成或选择受支持的语言。"
 ERROR_MESSAGE_READING_PDF = "读取PDF文件时出错"
 ERROR_MESSAGE_TOO_LONG = "总内容过长。请确保PDF和URL的组合文本少于{CHARACTER_LIMIT}个字符。"
@@ -148,53 +148,6 @@ LANGUAGE_MAPPING = {
     "Turkish": "tr",
 }
 
-# 注释掉原有配置，保留备份
-# Fireworks API-related constants
-# FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
-# FIREWORKS_MAX_TOKENS = 16_384
-# FIREWORKS_MODEL_ID = "accounts/fireworks/models/llama-v3p3-70b-instruct"
-# FIREWORKS_TEMPERATURE = 0.1
-
-# MeloTTS
-# MELO_API_NAME = "/synthesize"
-# MELO_TTS_SPACES_ID = "mrfakename/MeloTTS"
-# MELO_RETRY_ATTEMPTS = 3
-# MELO_RETRY_DELAY = 5  # in seconds
-
-# MELO_TTS_LANGUAGE_MAPPING = {
-#     "en": "EN",
-#     "es": "ES",
-#     "fr": "FR",
-#     "zh": "ZJ",
-#     "ja": "JP",
-#     "ko": "KR",
-# }
-
-# Suno related constants
-# SUNO_LANGUAGE_MAPPING = {
-#     "English": "en",
-#     "Chinese": "zh",
-#     "French": "fr",
-#     "German": "de",
-#     "Hindi": "hi",
-#     "Italian": "it",
-#     "Japanese": "ja",
-#     "Korean": "ko",
-#     "Polish": "pl",
-#     "Portuguese": "pt",
-#     "Russian": "ru",
-#     "Spanish": "es",
-#     "Turkish": "tr",
-# }
-
-# General audio-related constants
-# NOT_SUPPORTED_IN_MELO_TTS = list(
-#     set(SUNO_LANGUAGE_MAPPING.values()) - set(MELO_TTS_LANGUAGE_MAPPING.keys())
-# )
-# NOT_SUPPORTED_IN_MELO_TTS = [
-#     key for key, id in SUNO_LANGUAGE_MAPPING.items() if id in NOT_SUPPORTED_IN_MELO_TTS
-# ]
-
 # Jina Reader-related constants
 JINA_READER_URL = "https://r.jina.ai/"
 JINA_RETRY_ATTEMPTS = 3
@@ -233,7 +186,7 @@ UI_INPUTS = {
     },
     "length": {
         "label": "5. ⏱️ 选择长度",
-        "choices": ["短 (1-2分钟)", "中 (3-5分钟)"],
+        "choices": ["短 (1-2分钟)", "中 (3-5分钟)", "长 (15-20分钟)"],
         "value": "中 (3-5分钟)",
     },
     "language": {
@@ -250,10 +203,6 @@ UI_INPUTS = {
         "label": "8. 🎤 选择TTS服务",
         "choices": list(TTS_SERVICES.keys()),
         "value": "baidu",
-    },
-    "advanced_audio": {
-        "label": "9. 🔄 使用高级音频生成？（实验性）",
-        "value": True,
     },
 }
 UI_OUTPUTS = {
