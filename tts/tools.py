@@ -12,44 +12,7 @@ import requests
 from loguru import logger
 
 from .factory import TTSClientFactory
-
-# TTS服务配置
-import os
-DEFAULT_TTS_SERVICE = os.getenv("DEFAULT_TTS_SERVICE", "siliconflow")
-TTS_SERVICES = {
-    "baidu": {
-        "app_id": os.getenv("BAIDU_APP_ID", ""),
-        "api_key": os.getenv("BAIDU_API_KEY", ""), 
-        "secret_key": os.getenv("BAIDU_SECRET_KEY", ""),
-        "retry_attempts": int(os.getenv("BAIDU_RETRY_ATTEMPTS", "3")),
-        "retry_delay": int(os.getenv("BAIDU_RETRY_DELAY", "2"))
-    },
-    "ali": {
-        "access_key_id": os.getenv("ALI_ACCESS_KEY_ID", ""),
-        "access_key_secret": os.getenv("ALI_ACCESS_KEY_SECRET", ""),
-        "app_key": os.getenv("ALI_APP_KEY", ""),
-        "retry_attempts": int(os.getenv("ALI_RETRY_ATTEMPTS", "3")),
-        "retry_delay": int(os.getenv("ALI_RETRY_DELAY", "2"))
-    },
-    "xunfei": {
-        "app_id": os.getenv("XUNFEI_APP_ID", ""),
-        "api_key": os.getenv("XUNFEI_API_KEY", ""),
-        "api_secret": os.getenv("XUNFEI_API_SECRET", ""),
-        "retry_attempts": int(os.getenv("XUNFEI_RETRY_ATTEMPTS", "3")),
-        "retry_delay": int(os.getenv("XUNFEI_RETRY_DELAY", "2"))
-    },
-    "siliconflow": {
-        "api_key": os.getenv("SILICONFLOW_API_KEY", ""),
-        "model_id": os.getenv("SILICONFLOW_TTS_MODEL_ID", "FunAudioLLM/CosyVoice2-0.5B"),
-        "speed": float(os.getenv("SILICONFLOW_TTS_SPEED", "1.0")),
-        "retry_attempts": int(os.getenv("SILICONFLOW_TTS_RETRY_ATTEMPTS", "3")),
-        "retry_delay": int(os.getenv("SILICONFLOW_TTS_RETRY_DELAY", "2")),
-        "voice_name": {
-            "Host": os.getenv("SILICONFLOW_TTS_VOICE_HOST", "FunAudioLLM/CosyVoice2-0.5B:alex"),
-            "Guest": os.getenv("SILICONFLOW_TTS_VOICE_GUEST", "FunAudioLLM/CosyVoice2-0.5B:anna")
-        }
-    }
-}
+from .config import DEFAULT_TTS_SERVICE, TTS_SERVICES
 
 # 初始化TTS客户端
 tts_clients = {}

@@ -12,6 +12,22 @@ from .base import TTSClient
 class XunfeiTTSClient(TTSClient):
     """讯飞语音合成客户端"""
     
+    # 默认配置
+    DEFAULT_CONFIG = {
+        "app_id": None,
+        "api_key": None,
+        "api_secret": None,
+        "voice_name": {
+            "Host": "xiaoyan",  # 讯飞小燕，女声
+            "Guest": "xiaofeng"  # 讯飞小峰，男声
+        },
+        "speed": 50,        # 语速，取值0-100，默认为50
+        "pitch": 50,        # 音调，取值0-100，默认为50
+        "volume": 50,       # 音量，取值0-100，默认为50
+        "retry_attempts": 3,
+        "retry_delay": 5    # 重试延迟，单位秒
+    }
+    
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         # 讯飞TTS客户端初始化

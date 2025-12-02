@@ -14,13 +14,19 @@ from .ali import AliTTSClient
 from .xunfei import XunfeiTTSClient
 from .siliconflow import SiliconFlowTTSClient
 from .factory import TTSClientFactory
+from .config import (
+    DEFAULT_TTS_SERVICE,
+    BAIDU_TTS_CONFIG,
+    ALI_TTS_CONFIG,
+    XUNFEI_TTS_CONFIG,
+    SILICONFLOW_TTS_CONFIG,
+    TTS_SERVICES
+)
 from .tools import (
     generate_podcast_audio,
     generate_podcast_audio_segmented,
     split_text_by_speaker_tags,
-    init_tts_client,
-    DEFAULT_TTS_SERVICE,
-    TTS_SERVICES
+    init_tts_client
 )
 
 __all__ = [
@@ -35,5 +41,9 @@ __all__ = [
     "split_text_by_speaker_tags",
     "init_tts_client",
     "DEFAULT_TTS_SERVICE",
+    "BAIDU_TTS_CONFIG",
+    "ALI_TTS_CONFIG", 
+    "XUNFEI_TTS_CONFIG",
+    "SILICONFLOW_TTS_CONFIG",
     "TTS_SERVICES"
 ]

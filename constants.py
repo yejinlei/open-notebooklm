@@ -61,77 +61,7 @@ LLM_PLATFORMS = {
     "siliconflow": SILICONFLOW_CONFIG,
 }
 
-# TTS服务配置
-DEFAULT_TTS_SERVICE = os.getenv("DEFAULT_TTS_SERVICE", "baidu")
 
-# 百度语音合成 API 相关常量
-BAIDU_TTS_CONFIG = {
-    "app_id": os.getenv("BAIDU_APP_ID"),
-    "api_key": os.getenv("BAIDU_API_KEY"),
-    "secret_key": os.getenv("BAIDU_SECRET_KEY"),
-    "speed": int(os.getenv("BAIDU_TTS_SPEED", "5")),  # 语速，取值0-9，默认为5中语速
-    "pitch": int(os.getenv("BAIDU_TTS_PITCH", "5")),  # 音调，取值0-9，默认为5中语调
-    "volume": int(os.getenv("BAIDU_TTS_VOLUME", "5")),  # 音量，取值0-9，默认为5中音量
-    "per": {
-        "Host": "103",  # 度小宇，男声
-        "Guest": "105"  # 度小美，女声
-    },
-    "retry_attempts": int(os.getenv("BAIDU_RETRY_ATTEMPTS", "3")),
-    "retry_delay": int(os.getenv("BAIDU_RETRY_DELAY", "5")),  # in seconds
-}
-
-# 阿里语音合成 API 相关常量
-ALI_TTS_CONFIG = {
-    "access_key_id": os.getenv("ALI_ACCESS_KEY_ID"),
-    "access_key_secret": os.getenv("ALI_ACCESS_KEY_SECRET"),
-    "app_key": os.getenv("ALI_APP_KEY"),
-    "voice": {
-        "Host": "zh-CN_XiaoyunVoice",  # 阿里云晓云，女声
-        "Guest": "zh-CN_YunxiVoice"   # 阿里云云溪，男声
-    },
-    "speed": float(os.getenv("ALI_TTS_SPEED", "1.0")),  # 语速，取值0.6-2.0，默认为1.0
-    "pitch": float(os.getenv("ALI_TTS_PITCH", "1.0")),  # 音调，取值0.6-2.0，默认为1.0
-    "volume": float(os.getenv("ALI_TTS_VOLUME", "50")),  # 音量，取值0-100，默认为50
-    "retry_attempts": int(os.getenv("ALI_RETRY_ATTEMPTS", "3")),
-    "retry_delay": int(os.getenv("ALI_RETRY_DELAY", "5")),  # in seconds
-}
-
-# 讯飞语音合成 API 相关常量
-XUNFEI_TTS_CONFIG = {
-    "app_id": os.getenv("XUNFEI_APP_ID"),
-    "api_key": os.getenv("XUNFEI_API_KEY"),
-    "api_secret": os.getenv("XUNFEI_API_SECRET"),
-    "voice_name": {
-        "Host": "xiaoyan",  # 讯飞小燕，女声
-        "Guest": "xiaofeng"  # 讯飞小峰，男声
-    },
-    "speed": int(os.getenv("XUNFEI_TTS_SPEED", "50")),  # 语速，取值0-100，默认为50
-    "pitch": int(os.getenv("XUNFEI_TTS_PITCH", "50")),  # 音调，取值0-100，默认为50
-    "volume": int(os.getenv("XUNFEI_TTS_VOLUME", "50")),  # 音量，取值0-100，默认为50
-    "retry_attempts": int(os.getenv("XUNFEI_RETRY_ATTEMPTS", "3")),
-    "retry_delay": int(os.getenv("XUNFEI_RETRY_DELAY", "5")),  # in seconds
-}
-
-# 硅基流动语音合成 API 相关常量
-SILICONFLOW_TTS_CONFIG = {
-    "api_key": os.getenv("SILICONFLOW_API_KEY"),
-    "model_id": os.getenv("SILICONFLOW_TTS_MODEL_ID", "fnlp/MOSS-TTSD-v0.5"),
-    "voice_name": {
-        "Host": "fnlp/MOSS-TTSD-v0.5:alex",    # 男声
-        "Guest": "fnlp/MOSS-TTSD-v0.5:anna"     # 女声
-    },
-    "speed": float(os.getenv("SILICONFLOW_TTS_SPEED", "1.0")),  # 语速，取值0.25-4.0，默认为1.0
-    "retry_attempts": int(os.getenv("SILICONFLOW_RETRY_ATTEMPTS", "3")),
-    "retry_delay": int(os.getenv("SILICONFLOW_RETRY_DELAY", "5")),  # in seconds
-}
-
-# TTS服务配置映射
-TTS_SERVICES = {
-    "baidu": BAIDU_TTS_CONFIG,
-    "ali": ALI_TTS_CONFIG,
-    "xunfei": XUNFEI_TTS_CONFIG,
-    "siliconflow": SILICONFLOW_TTS_CONFIG,
-}
 
 # 语言映射
 LANGUAGE_MAPPING = {
@@ -167,6 +97,10 @@ UI_DESCRIPTION = """
 **注意：** 仅处理文本（100k字符限制）。
 """
 UI_AVAILABLE_LANGUAGES = list(set(LANGUAGE_MAPPING.keys()))
+
+# 导入TTS服务配置
+from tts import TTS_SERVICES
+
 UI_INPUTS = {
     "file_upload": {
         "label": "1. 📄 上传您的文档文件（支持PDF、Word等格式）",

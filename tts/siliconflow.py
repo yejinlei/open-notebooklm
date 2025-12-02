@@ -18,6 +18,19 @@ from .base import TTSClient
 class SiliconFlowTTSClient(TTSClient):
     """硅基流动语音合成客户端"""
     
+    # 默认配置
+    DEFAULT_CONFIG = {
+        "api_key": None,
+        "model_id": "fnlp/MOSS-TTSD-v0.5",
+        "voice_name": {
+            "Host": "fnlp/MOSS-TTSD-v0.5:alex",    # 男声
+            "Guest": "fnlp/MOSS-TTSD-v0.5:anna"     # 女声
+        },
+        "speed": 1.0,        # 语速，取值0.25-4.0，默认为1.0
+        "retry_attempts": 3,
+        "retry_delay": 5     # 重试延迟，单位秒
+    }
+    
     def __init__(self, config: Dict[str, Any]):
         # 确保配置包含必要的属性
         if "retry_attempts" not in config:
@@ -27,11 +40,11 @@ class SiliconFlowTTSClient(TTSClient):
         if "speed" not in config:
             config["speed"] = float(os.getenv("SILICONFLOW_TTS_SPEED", "1.0"))
         if "voice_name" not in config:
-            config["voice_name"] = {"Host": "FunAudioLLM/CosyVoice2-0.5B:alex", "Guest": "FunAudioLLM/CosyVoice2-0.5B:anna"}
+            config["voice_name"] = {"Host": "fnlp/MOSS-TTSD-v0.5:alex", "Guest": "fnlp/MOSS-TTSD-v0.5:anna"}
             
         super().__init__(config)
         self.api_key = config.get("api_key") or os.getenv("SILICONFLOW_API_KEY")
-        self.model_id = config.get("model_id") or os.getenv("SILICONFLOW_TTS_MODEL_ID", "FunAudioLLM/CosyVoice2-0.5B")
+        self.model_id = config.get("model_id", "fnlp/MOSS-TTSD-v0.5")
         if not self.api_key:
             raise ValueError("请设置SILICONFLOW_API_KEY环境变量")
     

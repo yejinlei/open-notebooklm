@@ -21,6 +21,22 @@ from .base import TTSClient
 class BaiduTTSClient(TTSClient):
     """百度语音合成客户端"""
     
+    # 默认配置
+    DEFAULT_CONFIG = {
+        "app_id": None,
+        "api_key": None, 
+        "secret_key": None,
+        "speed": 5,        # 语速，取值0-9，默认为5中语速
+        "pitch": 5,        # 音调，取值0-9，默认为5中语调
+        "volume": 5,       # 音量，取值0-9，默认为5中音量
+        "per": {
+            "Host": "103",  # 度小宇，男声
+            "Guest": "105"  # 度小美，女声
+        },
+        "retry_attempts": 3,
+        "retry_delay": 5   # 重试延迟，单位秒
+    }
+    
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.app_id = config.get("app_id")
