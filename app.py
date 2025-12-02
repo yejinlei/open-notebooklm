@@ -51,8 +51,9 @@ from prompts import (
     TONE_MODIFIER,
 )
 from schema import DialogueItem, ShortDialogue, MediumDialogue, LongDialogue
-from utils import generate_script, parse_url
+from utils import generate_script
 from tts import generate_podcast_audio
+from tool import process_files, process_url
 
 
 def generate_podcast(
@@ -80,44 +81,20 @@ def generate_podcast(
 
     # Process PDFs and Word documents if any
     if files:
-        for file in files:
-            try:
-                if file.lower().endswith(".pdf"):
-                    # Process PDF file with improved error handling
-                    with Path(file).open("rb") as f:
-                        reader = PdfReader(f)
-                        # 逐页提取文本，添加更详细的错误处理
-                        page_texts = []
-                        for page_num, page in enumerate(reader.pages, 1):
-                            try:
-                                page_text = page.extract_text()
-                                if page_text:
-                                    page_texts.append(page_text)
-                            except Exception as page_e:
-                                logger.warning(f"提取第{page_num}页文本失败: {str(page_e)}")
-                                # 跳过失败的页面，继续处理其他页面
-                                continue
-                        if page_texts:
-                            text += "\n\n".join(page_texts) + "\n\n"
-                elif file.lower().endswith(".docx"):
-                    # Process Word document
-                    doc = Document(file)
-                    doc_text = "\n\n".join([paragraph.text for paragraph in doc.paragraphs if paragraph.text.strip()])
-                    text += doc_text
-                else:
-                    # 不支持的文件类型，在解析阶段报错
-                    file_extension = Path(file).suffix.lower()
-                    raise gr.Error(f"不支持的文件类型: {file_extension}。请上传PDF(.pdf)或Word(.docx)文件。")
-            except gr.Error:
-                # 重新抛出Gradio错误
-                raise
-            except Exception as e:
-                raise gr.Error(f"读取文件时出错: {str(e)}")
+        try:
+            files_text = process_files(files)
+            if files_text:
+                text += files_text + "\n\n"
+        except ValueError as e:
+            # 重新抛出不支持文件类型的错误
+            raise gr.Error(str(e))
+        except Exception as e:
+            raise gr.Error(f"读取文件时出错: {str(e)}")
 
     # Process URL if provided
     if url:
         try:
-            url_text = parse_url(url)
+            url_text = process_url(url)
             if url_text:
                 text += "\n\n" + url_text
             else:

@@ -4,7 +4,6 @@ utils.py
 Functions:
 - generate_script: Get the dialogue from the LLM.
 - call_llm: Call the LLM with the given prompt and dialogue format.
-- parse_url: Parse the given URL and return the text content.
 """
 
 # Standard library imports
@@ -19,12 +18,10 @@ import logging
 from constants import (
     DEFAULT_LLM_PLATFORM,
     LLM_PLATFORMS,
-    JINA_READER_URL,
-    JINA_RETRY_ATTEMPTS,
-    JINA_RETRY_DELAY,
 )
 from schema import ShortDialogue, MediumDialogue
 from llm import LLMClientFactory
+from tool import parse_url
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -133,21 +130,7 @@ def call_llm(system_prompt: str, text: str, dialogue_format: Any, platform: Opti
         raise Exception(error_msg) from e
 
 
-def parse_url(url: str) -> str:
-    """Parse the given URL and return the text content."""
-    for attempt in range(JINA_RETRY_ATTEMPTS):
-        try:
-            full_url = f"{JINA_READER_URL}{url}"
-            response = requests.get(full_url, timeout=120)
-            response.raise_for_status()  # Raise an exception for bad status codes
-            break
-        except requests.RequestException as e:
-            if attempt == JINA_RETRY_ATTEMPTS - 1:  # Last attempt
-                raise ValueError(
-                    f"Failed to fetch URL after {JINA_RETRY_ATTEMPTS} attempts: {e}"
-                ) from e
-            time.sleep(JINA_RETRY_DELAY)  # Wait for X second before retrying
-    return response.text
+
 
 
 
